@@ -1,0 +1,209 @@
+generator client {
+  provider = "prisma-client-js"
+  // Prisma ORM v7+ requires an explicit output path.
+  // This file lives in ./prisma, so the path is relative to that folder.
+  output = "../generated/prisma/client"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  FRANCHISE_OWNER
+  PLAYER
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         UserRole
+
+  playerProfile    PlayerProfile?
+  franchiseProfile FranchiseProfile?
+}
+
+model PlayerProfile {
+  id        String @id @default(cuid())
+  userId    String @unique
+  psid      String
+  isBanned  Boolean @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  enrollments GameEnrollment[]
+  skills      PlayerSkill[]
+  fouls       Foul[]
+  auctions    Auction[]
+  teamPlayers TeamPlayer[]
+}
+
+model FranchiseProfile {
+  id        String @id @default(cuid())
+  userId    String @unique
+  name      String
+  budget    Int
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  bids        Bid[]
+  teamPlayers TeamPlayer[]
+  matchesAsTeam1 Match[] @relation("MatchTeam1")
+  matchesAsTeam2 Match[] @relation("MatchTeam2")
+}
+
+model Game {
+  id String @id @default(cuid())
+  name  String
+  rules String
+
+  maxPlayersPerTeam Int
+  requiredPlayers   Int
+  createdAt DateTime @default(now())
+
+  enrollments GameEnrollment[]
+  playerSkills PlayerSkill[]
+  fouls        Foul[]
+  auctions     Auction[]
+  teamPlayers TeamPlayer[]
+  matches      Match[]
+}
+
+model GameEnrollment {
+  id String @id @default(cuid())
+  gameId String
+  playerId String
+
+  game   Game          @relation(fields: [gameId], references: [id])
+  player PlayerProfile @relation(fields: [playerId], references: [id])
+
+  @@unique([gameId, playerId])
+  @@index([gameId])
+  @@index([playerId])
+}
+
+enum SkillType {
+  BATTER
+  DEFENDER
+  MIDFIELDER
+  GOALKEEPER
+  OTHER
+}
+
+model PlayerSkill {
+  id String @id @default(cuid())
+  gameId String
+  playerId String
+  skillType SkillType
+  rating Int
+
+  game   Game           @relation(fields: [gameId], references: [id])
+  player PlayerProfile  @relation(fields: [playerId], references: [id])
+
+  @@unique([gameId, playerId, skillType])
+  @@index([gameId])
+  @@index([playerId])
+}
+
+model Foul {
+  id String @id @default(cuid())
+  gameId String
+  playerId String
+  penaltyPoints Int
+  reason String
+  createdAt DateTime @default(now())
+
+  game   Game           @relation(fields: [gameId], references: [id])
+  player PlayerProfile  @relation(fields: [playerId], references: [id])
+
+  @@index([gameId])
+  @@index([playerId])
+}
+
+enum AuctionStatus {
+  OPEN
+  FINALIZED
+}
+
+model Auction {
+  id String @id @default(cuid())
+  gameId String
+  playerId String
+
+  status AuctionStatus @default(OPEN)
+  winnerFranchiseId String?
+  finalizedAt DateTime?
+
+  game   Game           @relation(fields: [gameId], references: [id])
+  player PlayerProfile  @relation(fields: [playerId], references: [id])
+
+  bids        Bid[]
+  teamPlayers TeamPlayer[]
+
+  @@unique([gameId, playerId])
+  @@index([gameId])
+  @@index([playerId])
+}
+
+model Bid {
+  id String @id @default(cuid())
+  auctionId String
+  franchiseId String
+  amount Int
+  createdAt DateTime @default(now())
+
+  auction Auction          @relation(fields: [auctionId], references: [id])
+  franchise FranchiseProfile @relation(fields: [franchiseId], references: [id])
+
+  @@unique([auctionId, franchiseId])
+  @@index([auctionId])
+  @@index([franchiseId])
+}
+
+model TeamPlayer {
+  id String @id @default(cuid())
+  gameId String
+  franchiseId String
+  playerId String
+  auctionId String
+
+  bidAmount Int
+  assignedAt DateTime @default(now())
+
+  game   Game              @relation(fields: [gameId], references: [id])
+  franchise FranchiseProfile @relation(fields: [franchiseId], references: [id])
+  player PlayerProfile    @relation(fields: [playerId], references: [id])
+  auction Auction          @relation(fields: [auctionId], references: [id])
+
+  @@unique([gameId, franchiseId, playerId])
+  @@index([gameId])
+  @@index([franchiseId])
+  @@index([playerId])
+}
+
+model Match {
+  id String @id @default(cuid())
+  gameId String
+
+  team1FranchiseId String
+  team2FranchiseId String
+
+  startTime DateTime
+  endTime DateTime
+  createdAt DateTime @default(now())
+
+  game Game @relation(fields: [gameId], references: [id])
+  team1 FranchiseProfile @relation("MatchTeam1", fields: [team1FranchiseId], references: [id])
+  team2 FranchiseProfile @relation("MatchTeam2", fields: [team2FranchiseId], references: [id])
+
+  @@index([gameId])
+  @@index([team1FranchiseId])
+  @@index([team2FranchiseId])
+}
+
